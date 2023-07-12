@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+
+<html>
+<head>
+  <title>Text Completion</title>
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    #modelInput {
+      width: 300px;
+    }
+
+    #promptInput {
+      width: 300px;
+      height: 200px;
+    }
+
+    .input-group {
+      display: flex;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .input-group label {
+      margin-right: 10px;
+      font-weight: bold;
+    }
+
+    .input-group textarea {
+      resize: vertical;
+    }
+
+    .button-container {
+      display: flex;
+      align-items: center;
+      margin-top: 10px;
+    }
+
+    .button-container button {
+      margin-left: 190px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+    <div class="input-group">
+      <label for="modelInput">모델명:</label>
+      <input type="text" id="modelInput" class="form-control" placeholder="ex) davinci:ft-*********">
+    </div>
+    <div class="input-group">
+      <label for="promptInput">질문:</label>
+      <div class="button-container">
+        <button onclick="completeText()" class="btn btn-primary">질문하기</button>
+      </div>
+    </div>
+    <div class="input-group">
+      <textarea id="promptInput" class="form-control" placeholder="질문을 입력해주세요." rows="4"></textarea>
+    </div>
+    <div id="output"></div>
+  </div>
+
+  <script>
+    const apiKey = 'YOUR_API_KEY';
+    const completionsApiUrl = 'https://api.openai.com/v1/completions';
+
+    const outputDiv = document.getElementById('output');
+
+    async function completeText() {
+      const modelInput = document.getElementById('modelInput');
+      const model = modelInput.value;
+
+      const promptInput = document.getElementById('promptInput');
+      const prompt = promptInput.value;
+
+      try {
+        const response = await fetch(completionsApiUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`
+          },
+          body: JSON.stringify({
+            model: model,
+            prompt: prompt,
+            max_tokens: 2000,
+            temperature: 0,
+            stop: "end"
+          })
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          const completions = data.choices.map(choice => choice.text).join('<br>');
+          outputDiv.innerHTML = `<p>Completions:</p><p>${completions}</p>`;
+        } else {
+          outputDiv.innerHTML = `Error: ${response.status}`;
+          console.error('Error:', response.status);
+          const errorData = await response.json();
+          console.error('Error Details:', errorData);
+        }
+      } catch (error) {
+        outputDiv.innerHTML = `Error: ${error}`;
+        console.error('Error:', error);
+      }
+    }
+  </script>
+</body>
+</html>

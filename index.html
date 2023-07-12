@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Fine-tuning</title>
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+  <style>
+    .fine-tunes-table {
+      border-collapse: collapse;
+      width: 50%;
+    }
+
+    .fine-tunes-table th,
+    .fine-tunes-table td {
+      border: 1px solid black;
+      padding: 8px;
+      text-align: left;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container mt-4">
+    <div class="form-group">
+      <input type="file" id="fileInput" accept=".jsonl" class="form-control-file">
+    </div>
+
+    <button onclick="uploadData()" class="btn btn-primary">데이터 업로드</button>
+  </div>
+
+  <div class="container mt-4">
+    <button onclick="fineTune()" class="btn btn-primary">파인튜닝 시작</button>
+
+    <select id="modelSelect" class="form-control mt-2">
+      <option value="curie">curie</option>
+      <option value="ada">ada</option>
+      <option value="babbage">babbage</option>
+      <option value="davinci">davinci</option>
+    </select>
+
+    <div class="mt-4">
+      <button onclick="getFineTunes()" class="btn btn-primary">진행목록</button>
+    </div>
+  </div>
+
+  <div class="container mt-4">
+    <div id="output"></div>
+  </div>
+
+  <script>
+    // OpenAI API 요청을 위한 인증 정보 설정
+    const apiKey = 'YOUR_API_KEY';
+    const filesApiUrl = 'https://api.openai.com/v1/files';
+    const fineTuneApiUrl = 'https://api.openai.com/v1/fine-tunes';
+
+    let fileId = null;
+    const outputDiv = document.getElementById('output');
+
+    async function uploadData() {
+      const fileInput = document.getElementById('fileInput');
+      const file = fileInput.files[0];
+
+      if (file) {
+        const formData = new FormData();
+        formData.append('purpose', 'fine-tune');
+        formData.append('file', file);
+
+        try {
+          const response = await fetch(filesApiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`
+            },
+            body: formData
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            outputDiv.innerHTML = `Data upload successful! ${JSON.stringify(data)}`;
+            fileId = data.id;
+          } else {
+            outputDiv.innerHTML = `Error: ${response.status}`;
+            console.error('Error:', response.status);
+          }
+        } catch (error) {
+          outputDiv.innerHTML = `Error: ${error}`;
+          console.error('Error:', error);
+        }
+      } else {
+        outputDiv.innerHTML = 'Please select a file.';
+        console.error('Please select a file.');
+      }
+    }
+
+    async function fineTune() {
+      console.log(fileId);
+
+      if (fileId) {
+        const modelSelect = document.getElementById('modelSelect');
+        const model = modelSelect.value;
+
+        try {
+          const response = await fetch(fineTuneApiUrl, {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${apiKey}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              training_file: `${fileId}`,
+              model: `${model}`
+            })
+          });
+
+          if (response.ok) {
+            const data = await response.json();
+            outputDiv.innerHTML = `Fine-tuning successful! ${JSON.stringify(data)}`;
+          } else {
+            outputDiv.innerHTML = `Error: ${response.status}`;
+            console.error('Error:', response.status);
+            const errorData = await response.json();
+            console.error('Error Details:', errorData);
+          }
+        } catch (error) {
+          outputDiv.innerHTML = `Error: ${error}`;
+          console.error('Error:', error);
+        }
+      } else {
+        outputDiv.innerHTML = 'Please upload a file first.';
+        console.error('Please upload a file first.');
+      }
+    }
+
+    async function getFineTunes() {
+      try {
+        const response = await fetch(fineTuneApiUrl, {
+          method: 'GET',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          outputDiv.innerHTML = `
+            <h3>파인튜닝 진행목록</h3>
+            <table class="table fine-tunes-table">
+              <thead class="thead-dark">
+                <tr>
+                  <th scope="col">ID</th>
+                  <th scope="col">Model</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+              </tbody>
+            </table>
+          `;
+          const table = outputDiv.querySelector('.fine-tunes-table tbody');
+
+          if (data.data.length === 0) {
+            const emptyRow = document.createElement('tr');
+            const emptyCell = document.createElement('td');
+            emptyCell.textContent = 'No fine-tunes found.';
+            emptyCell.setAttribute('colspan', '4');
+            emptyRow.appendChild(emptyCell);
+            table.appendChild(emptyRow);
+          } else {
+            data.data.forEach((fineTune) => {
+              if (fineTune.status === "cancelled") {
+                return;
+              }
+
+              const tableRow = document.createElement('tr');
+              const idCell = document.createElement('td');
+              idCell.textContent = fineTune.id;
+              const modelCell = document.createElement('td');
+              modelCell.textContent = fineTune.model;
+              const statusCell = document.createElement('td');
+              statusCell.textContent = fineTune.status;
+              const actionCell = document.createElement('td');
+              const cancelButton = document.createElement('button');
+              cancelButton.textContent = 'Cancel';
+              cancelButton.addEventListener('click', () => {
+                cancelFineTune(fineTune.id);
+              });
+              actionCell.appendChild(cancelButton);
+              tableRow.appendChild(idCell);
+              tableRow.appendChild(modelCell);
+              tableRow.appendChild(statusCell);
+              tableRow.appendChild(actionCell);
+              table.appendChild(tableRow);
+            });
+          }
+        } else {
+          outputDiv.innerHTML = `Error: ${response.status}`;
+          console.error('Error:', response.status);
+          const errorData = await response.json();
+          console.error('Error Details:', errorData);
+        }
+      } catch (error) {
+        outputDiv.innerHTML = `Error: ${error}`;
+        console.error('Error:', error);
+      }
+    }
+
+    async function cancelFineTune(fineTuneId) {
+      try {
+        const cancelUrl = `${fineTuneApiUrl}/${fineTuneId}/cancel`;
+        const response = await fetch(cancelUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`
+          }
+        });
+
+        if (response.ok) {
+          const data = await response.json();
+          outputDiv.innerHTML = `Fine-tuning canceled! ${JSON.stringify(data)}`;
+        } else {
+          outputDiv.innerHTML = `Error: ${response.status}`;
+          console.error('Error:', response.status);
+          const errorData = await response.json();
+          console.error('Error Details:', errorData);
+        }
+      } catch (error) {
+        outputDiv.innerHTML = `Error: ${error}`;
+        console.error('Error:', error);
+      }
+    }
+  </script>
+</body>
+</html>
